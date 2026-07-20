@@ -16,7 +16,7 @@
 
 ### 项目简介
 
-Sandbox Toolkit 是一套针对受限沙箱环境的综合工具集。
+Sandbox Toolkit 是一套针对 AI 受限沙箱环境的综合工具集。
 
 本项目最初为 [TRAE](https://www.trae.ai/) IDE 的远程沙箱环境开发。TRAE 沙箱有以下限制：
 
