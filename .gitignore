@@ -1,0 +1,34 @@
+# Cloudflare Tunnel token (contains secrets)
+cf-tunnel-token.txt
+
+# Cloudflared binary (too large, download separately)
+cloudflared
+cloudflared.exe
+
+# Compiled shared library
+socks_hook.so
+
+# Log files
+*.log
+*.pid
+*.state
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -244,6 +244,14 @@ bash scripts/frp-tunnel-manager.sh start YOUR_TOKEN:YOUR_TUNNEL_ID
 
 GPL-3.0 License - 衍生作品必须开源，禁止商用。详见 [LICENSE](LICENSE)。
 
+### 致谢
+
+本项目在开发过程中参考了以下资源：
+
+- [doevt.top](https://doevt.top/doubao/) - 沙箱部署脚本和 fullroot 命名空间方案的初始参考
+- [Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) - Cloudflare Tunnel 官方文档及 `cloudflared` 工具
+- Linux 内核 `unshare`/`nsenter` 用户命名空间机制
+
 ---
 
 ## English Documentation
@@ -477,3 +485,11 @@ bash scripts/frp-tunnel-manager.sh start YOUR_TOKEN:YOUR_TUNNEL_ID
 ### License
 
 GPL-3.0 License - Derivative works must be open-sourced; commercial use is prohibited. See [LICENSE](LICENSE).
+
+### Acknowledgments
+
+This project referenced the following resources during development:
+
+- [doevt.top](https://doevt.top/doubao/) - Initial reference for sandbox deployment scripts and fullroot namespace approach
+- [Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) - Official Cloudflare Tunnel documentation and the `cloudflared` tool
+- Linux kernel `unshare`/`nsenter` user namespace mechanism
