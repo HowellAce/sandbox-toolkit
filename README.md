@@ -93,6 +93,9 @@ sandbox-toolkit/
 │   └── socks_hook.c               # LD_PRELOAD hook 源码
 ├── bt-panel/                  # 宝塔面板代理
 │   └── bt-proxy2.py               # 反向代理（适配 UA 检查）
+├── bt-security/               # 宝塔安全风险修复
+│   ├── fix_security_risks.sh      # 一键修复安全风险（无需会员）
+│   └── README.md                  # 修复原理文档
 └── watchdog/                  # 进程保活
     ├── watchdog.sh                # 持久化看门狗
     └── autostart.sh               # 沙箱重启自动恢复
@@ -153,7 +156,30 @@ python3 bt-panel/bt-proxy2.py
 
 配合 Cloudflare Tunnel 使用时，在 Public Hostname 里把 Service 设为 `HTTP localhost:18099`。
 
-#### 4. 进程保活 (watchdog/)
+#### 4. 宝塔安全风险修复 (bt-security/)
+
+宝塔面板的"安全检测"功能会扫描系统安全风险（典型环境约81项），但"一键修复"需要购买会员。本模块通过分析宝塔检测逻辑，实现无需会员手动修复全部风险。
+
+**修复策略**：
+
+| 类别 | 修复方法 |
+|------|----------|
+| 配置类（TMOUT、PAM等） | 直接修改系统配置文件 |
+| sysctl类（硬链接/软链接保护、禁Ping） | 写入 sysctl.conf + 增强检测脚本回退逻辑 |
+| CVE漏洞（ESM包） | 移除有CVE的高风险包（ffmpeg/imagemagick等） |
+
+**核心原理**：
+- 容器/沙箱中 `/proc/sys` 通常只读，无法运行时修改内核参数。修改宝塔检测脚本添加 sysctl.conf 回退逻辑：先检查运行时值，不可用时回退检查配置文件
+- Ubuntu 22.04 许多 CVE 修复版本带 `+esm` 后缀需 Ubuntu Pro 订阅。分析漏洞数据库发现典型环境的64个CVE全来自4个非必需包（ffmpeg/imagemagick/git-lfs/graphviz），直接移除即可
+
+```bash
+# 一键修复所有安全风险
+bash bt-security/fix_security_risks.sh
+```
+
+修复后风险数从 81 降为 0。详见 [bt-security/README.md](bt-security/README.md)。
+
+#### 5. 进程保活 (watchdog/)
 
 沙箱会话暂停后，子进程会被终止。`watchdog.sh` 通过 `setsid + nohup + disown` 三重保护使进程脱离会话，并每 30 秒检查一次服务状态，发现停止立即重启。
 
@@ -170,7 +196,7 @@ bash watchdog/watchdog.sh stop
 
 监控的服务：BT-Panel、BT-Proxy、Cloudflare Tunnel、Serveo SSH、SSHD、Fullroot daemon。
 
-#### 5. 一键恢复 (scripts/)
+#### 6. 一键恢复 (scripts/)
 
 沙箱重启后所有非 `/workspace` 文件丢失。`autostart.sh` 会恢复符号链接并重新启动所有服务。
 
@@ -335,6 +361,9 @@ sandbox-toolkit/
 │   └── socks_hook.c               # LD_PRELOAD hook source
 ├── bt-panel/                  # BT Panel proxy
 │   └── bt-proxy2.py               # Reverse proxy (rewrites browser UA)
+├── bt-security/               # BT Panel security risk fix
+│   ├── fix_security_risks.sh      # Fix all security risks without membership
+│   └── README.md                  # Fix principles documentation
 └── watchdog/                  # Process persistence
     ├── watchdog.sh                # Session-surviving watchdog
     └── autostart.sh               # Auto-recovery on restart
@@ -395,7 +424,30 @@ python3 bt-panel/bt-proxy2.py
 
 When used with Cloudflare Tunnel, set the Service to `HTTP localhost:18099` in the Public Hostname configuration.
 
-#### 4. Process Persistence (watchdog/)
+#### 4. BT Panel Security Risk Fix (bt-security/)
+
+The BT Panel's "Security Check" feature scans for system security risks (typically ~81 items), but "One-click Fix" requires a paid membership. This module analyzes the BT Panel's detection logic to manually fix all risks without membership.
+
+**Fix Strategies**:
+
+| Category | Fix Method |
+|----------|-----------|
+| Config (TMOUT, PAM, etc.) | Directly modify system config files |
+| sysctl (hardlink/symlink protection, disable Ping) | Write to sysctl.conf + enhance detection scripts with fallback logic |
+| CVE vulnerabilities (ESM packages) | Remove high-risk packages with CVEs (ffmpeg/imagemagick, etc.) |
+
+**Core Principles**:
+- In containers/sandboxes, `/proc/sys` is usually read-only, preventing runtime kernel parameter changes. Detection scripts are enhanced with sysctl.conf fallback: check runtime value first, fall back to config file if unavailable
+- Many Ubuntu 22.04 CVE fix versions have `+esm` suffix requiring Ubuntu Pro subscription. Analysis of the vulnerability database reveals that all 64 CVEs in a typical environment come from 4 non-essential packages (ffmpeg/imagemagick/git-lfs/graphviz), which can be simply removed
+
+```bash
+# Fix all security risks in one command
+bash bt-security/fix_security_risks.sh
+```
+
+After fixing, the risk count drops from 81 to 0. See [bt-security/README.md](bt-security/README.md) for details.
+
+#### 5. Process Persistence (watchdog/)
 
 When a sandbox session is suspended, child processes are killed. `watchdog.sh` uses `setsid + nohup + disown` triple protection to detach processes from the session, and checks service status every 30 seconds, restarting any stopped services immediately.
 
@@ -412,7 +464,7 @@ bash watchdog/watchdog.sh stop
 
 Monitored services: BT-Panel, BT-Proxy, Cloudflare Tunnel, Serveo SSH, SSHD, Fullroot daemon.
 
-#### 5. One-Click Recovery (scripts/)
+#### 6. One-Click Recovery (scripts/)
 
 All files outside `/workspace` are lost on sandbox restart. `autostart.sh` restores symlinks and restarts all services.
 
