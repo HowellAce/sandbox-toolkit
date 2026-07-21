@@ -91,7 +91,9 @@ Public Internet (via Cloudflare Tunnel)
 ### bt-panel/
 - `bt-proxy3.py`: Multi-threaded HTTP reverse proxy (v3, recommended). Uses `ThreadingHTTPServer` for concurrent request handling, supports WebSocket upgrade tunneling, HTTP/1.1 keep-alive. Replaces User-Agent with browser UA, forwards to BT Panel on port 24965 via SSL. Fixes Chrome crash issue caused by v2's single-threaded design
 - `bt-proxy2.py`: Legacy single-threaded HTTP reverse proxy (v2). Uses `HTTPServer` (one request at a time), HTTP/1.0, no WebSocket support. Kept for reference only — do not use in production
+- `fix_login_salt.sh`: Fix BT Panel login failure caused by `chdck_salt()` corrupting password hash. Uses panel's own Python ORM (`/www/server/panel/pyenv/bin/python3`) to set correct password hash. **Never use sqlite3 CLI** — ORM and sqlite3 may read inconsistent database state
 - **Why v3 was needed**: Chrome loads 10+ concurrent resources (JS/CSS/API) after login; v2's single-thread queue caused timeouts and tab crashes. v3 uses `ThreadingHTTPServer` (50 concurrent max) + WebSocket tunnel via `select()` for bidirectional forwarding
+- **Why fix_login_salt.sh was needed**: BT Panel's `chdck_salt()` function detects NULL salt on startup, generates new salt, and re-hashes the password — but treats the existing hash as plaintext, corrupting it. Symptom: "用户名或密码错误" despite correct credentials. The script calculates `md5(md5(md5(password) + '_bt.cn') + salt)` and updates via ORM
 
 ### bt-security/
 - `fix_security_risks.sh`: One-click security risk fix script. Fixes all 81 risks without BT Panel membership
@@ -155,6 +157,8 @@ Public Internet (via Cloudflare Tunnel)
 | `/proc/sys` read-only in container | Kernel parameter cannot be modified at runtime | Write to `/etc/sysctl.conf`, detection scripts have fallback logic |
 | CVE fix versions require ESM (+esm) | Ubuntu Pro subscription needed | Remove non-essential packages (ffmpeg/imagemagick/etc.) |
 | BT Panel scan not updating | `new_vul_list` points to wrong OS database | Call `pw.init_new_vul()` then `pw._get_list()` |
+| BT Panel login "用户名或密码错误" despite correct credentials | `chdck_salt()` corrupted password hash on startup | Run `bash bt-panel/fix_login_salt.sh username password` |
+| sqlite3 CLI shows different data than panel ORM | WAL/journal mode inconsistency | Always use panel's Python ORM (`/www/server/panel/pyenv/bin/python3`), not sqlite3 CLI |
 
 ## Testing Commands
 

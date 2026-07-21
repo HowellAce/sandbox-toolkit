@@ -94,14 +94,18 @@ sandbox-toolkit/
 │   └── socks_hook.c               # LD_PRELOAD hook 源码
 ├── bt-panel/                  # 宝塔面板代理
 │   ├── bt-proxy3.py               # 反向代理 v3（多线程+WebSocket，推荐）
-│   └── bt-proxy2.py               # 反向代理 v2（单线程旧版，仅参考）
+│   ├── bt-proxy2.py               # 反向代理 v2（单线程旧版，仅参考）
+│   └── fix_login_salt.sh          # 修复登录失败（chdck_salt密码损坏）
 ├── bt-security/               # 宝塔安全风险修复
 │   ├── fix_security_risks.sh      # 一键修复安全风险（无需会员）
 │   └── README.md                  # 修复原理文档
-└── watchdog/                  # 进程保活
-    ├── bt-watchdog.sh             # 宝塔面板保活看门狗 v3
-    ├── watchdog.sh                # 通用看门狗
-    └── autostart.sh               # 沙箱重启自动恢复
+├── watchdog/                  # 进程保活
+│   ├── bt-watchdog.sh             # 宝塔面板保活看门狗 v3
+│   ├── watchdog.sh                # 通用看门狗
+│   └── autostart.sh               # 沙箱重启自动恢复
+├── PATCHES.md                 # 补丁列表（所有修复一览）
+├── AGENTS.md                  # AI 助手结构化文档
+└── README.md                  # 项目文档
 ```
 
 ### 核心功能
@@ -178,6 +182,14 @@ python3 bt-panel/bt-proxy3.py
 ```
 
 配合 Cloudflare Tunnel 使用时，在 Public Hostname 里把 Service 设为 `HTTP localhost:18099`。
+
+**登录失败修复**：如果登录宝塔面板一直提示"用户名或密码错误"但凭据正确，可能是 `chdck_salt()` 函数在面板启动时损坏了密码哈希。使用以下命令修复：
+
+```bash
+bash bt-panel/fix_login_salt.sh 用户名 密码
+```
+
+原理：`chdck_salt()` 检测到 salt 为 NULL 时会重新生成 salt 并重新哈希密码，但把已有哈希当作明文再次哈希导致不匹配。本脚本通过面板自带的 Python ORM 重新设置正确的密码哈希。**切勿用 sqlite3 命令行修改数据库**，因为 ORM 和 sqlite3 可能读到不一致的数据。
 
 #### 4. 宝塔安全风险修复 (bt-security/)
 
@@ -385,14 +397,18 @@ sandbox-toolkit/
 │   └── socks_hook.c               # LD_PRELOAD hook source
 ├── bt-panel/                  # BT Panel proxy
 │   ├── bt-proxy3.py               # Reverse proxy v3 (multi-threaded, WebSocket, recommended)
-│   └── bt-proxy2.py               # Reverse proxy v2 (single-threaded, legacy)
+│   ├── bt-proxy2.py               # Reverse proxy v2 (single-threaded, legacy)
+│   └── fix_login_salt.sh          # Fix login failure (chdck_salt password corruption)
 ├── bt-security/               # BT Panel security risk fix
 │   ├── fix_security_risks.sh      # Fix all security risks without membership
 │   └── README.md                  # Fix principles documentation
-└── watchdog/                  # Process persistence
-    ├── bt-watchdog.sh             # BT Panel watchdog v3
-    ├── watchdog.sh                # Session-surviving watchdog
-    └── autostart.sh               # Auto-recovery on restart
+├── watchdog/                  # Process persistence
+│   ├── bt-watchdog.sh             # BT Panel watchdog v3
+│   ├── watchdog.sh                # Session-surviving watchdog
+│   └── autostart.sh               # Auto-recovery on restart
+├── PATCHES.md                 # Patch list (all fixes at a glance)
+├── AGENTS.md                  # Structured document for AI assistants
+└── README.md                  # Project documentation
 ```
 
 ### Key Features
@@ -469,6 +485,14 @@ python3 bt-panel/bt-proxy3.py
 ```
 
 When used with Cloudflare Tunnel, set the Service to `HTTP localhost:18099` in the Public Hostname configuration.
+
+**Login Failure Fix**: If BT Panel login keeps showing "username or password error" despite correct credentials, the `chdck_salt()` function may have corrupted the password hash on panel startup. Fix with:
+
+```bash
+bash bt-panel/fix_login_salt.sh username password
+```
+
+Principle: `chdck_salt()` regenerates salt and re-hashes the password when salt is NULL, but treats the existing hash as plaintext, causing mismatch. This script uses the panel's own Python ORM to set the correct hash. **Never use sqlite3 CLI to modify the database** — ORM and sqlite3 may read inconsistent data.
 
 #### 4. BT Panel Security Risk Fix (bt-security/)
 
