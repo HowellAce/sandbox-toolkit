@@ -89,7 +89,9 @@ Public Internet (via Cloudflare Tunnel)
 - `socks_hook.c`: C source for LD_PRELOAD library to intercept `connect()`. **Does not work on Go binaries** — kept as reference for C/Python programs
 
 ### bt-panel/
-- `bt-proxy2.py`: HTTP reverse proxy. Reads requests, replaces User-Agent with browser UA, forwards to BT Panel on port 9999/24965 via SSL. Needed because BT Panel's `is_spider()` function rejects non-browser UAs
+- `bt-proxy3.py`: Multi-threaded HTTP reverse proxy (v3, recommended). Uses `ThreadingHTTPServer` for concurrent request handling, supports WebSocket upgrade tunneling, HTTP/1.1 keep-alive. Replaces User-Agent with browser UA, forwards to BT Panel on port 24965 via SSL. Fixes Chrome crash issue caused by v2's single-threaded design
+- `bt-proxy2.py`: Legacy single-threaded HTTP reverse proxy (v2). Uses `HTTPServer` (one request at a time), HTTP/1.0, no WebSocket support. Kept for reference only — do not use in production
+- **Why v3 was needed**: Chrome loads 10+ concurrent resources (JS/CSS/API) after login; v2's single-thread queue caused timeouts and tab crashes. v3 uses `ThreadingHTTPServer` (50 concurrent max) + WebSocket tunnel via `select()` for bidirectional forwarding
 
 ### bt-security/
 - `fix_security_risks.sh`: One-click security risk fix script. Fixes all 81 risks without BT Panel membership
@@ -103,7 +105,8 @@ Public Internet (via Cloudflare Tunnel)
 - **Scan results**: `/www/server/panel/data/warning/tmp_result.json`
 
 ### watchdog/
-- `watchdog.sh`: Process monitor. Every 30s checks if services are running, restarts if down. Uses `setsid` to detach from session. Monitors: BT-Panel, BT-Proxy, Cloudflare Tunnel, Serveo SSH, SSHD, Fullroot
+- `bt-watchdog.sh`: BT Panel watchdog v3. Monitors and auto-restarts: BT-Panel, bt-proxy3, cf-edge-proxy, cloudflared. 30s polling interval. Fixes `/www` symlink on each cycle. Forces HTTP/2 protocol for cloudflared (QUIC unavailable in sandbox). Uses `setsid` for all child processes
+- `watchdog.sh`: General-purpose process monitor. Every 30s checks if services are running, restarts if down. Monitors: BT-Panel, BT-Proxy, Cloudflare Tunnel, Serveo SSH, SSHD, Fullroot
 - `autostart.sh`: Post-restart recovery. Restores `/www` → `/workspace/www` symlink, restarts all services including watchdog itself
 
 ### scripts/

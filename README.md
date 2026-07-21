@@ -93,12 +93,14 @@ sandbox-toolkit/
 │   ├── socks5-bridge.py           # SOCKS5 桥接器
 │   └── socks_hook.c               # LD_PRELOAD hook 源码
 ├── bt-panel/                  # 宝塔面板代理
-│   └── bt-proxy2.py               # 反向代理（适配 UA 检查）
+│   ├── bt-proxy3.py               # 反向代理 v3（多线程+WebSocket，推荐）
+│   └── bt-proxy2.py               # 反向代理 v2（单线程旧版，仅参考）
 ├── bt-security/               # 宝塔安全风险修复
 │   ├── fix_security_risks.sh      # 一键修复安全风险（无需会员）
 │   └── README.md                  # 修复原理文档
 └── watchdog/                  # 进程保活
-    ├── watchdog.sh                # 持久化看门狗
+    ├── bt-watchdog.sh             # 宝塔面板保活看门狗 v3
+    ├── watchdog.sh                # 通用看门狗
     └── autostart.sh               # 沙箱重启自动恢复
 ```
 
@@ -164,11 +166,15 @@ bash cf-tunnel/cf-tunnel-start.sh
 
 #### 3. 宝塔面板代理 (bt-panel/)
 
-宝塔面板有 `is_spider()` UA 检查，会拒绝非浏览器 UA 的请求。`bt-proxy2.py` 作为反向代理，把所有请求的 User-Agent 替换为浏览器 UA，同时处理 HTTPS 到 HTTP 的转换。
+宝塔面板有 `is_spider()` UA 检查，会拒绝非浏览器 UA 的请求。代理作为反向代理，把所有请求的 User-Agent 替换为浏览器 UA，同时处理 HTTPS 到 HTTP 的转换。
+
+**bt-proxy3.py（推荐）**：多线程并发 + WebSocket 支持 + HTTP/1.1 keep-alive。解决了 bt-proxy2.py 单线程导致 Chrome 登录后闪退的问题。
+
+**bt-proxy2.py（旧版）**：单线程实现，仅供参考，不建议使用。
 
 ```bash
-# 启动代理（默认监听 18099 端口）
-python3 bt-panel/bt-proxy2.py
+# 启动代理 v3（默认监听 18099 端口）
+python3 bt-panel/bt-proxy3.py
 ```
 
 配合 Cloudflare Tunnel 使用时，在 Public Hostname 里把 Service 设为 `HTTP localhost:18099`。
@@ -378,11 +384,13 @@ sandbox-toolkit/
 │   ├── socks5-bridge.py           # SOCKS5 bridge
 │   └── socks_hook.c               # LD_PRELOAD hook source
 ├── bt-panel/                  # BT Panel proxy
-│   └── bt-proxy2.py               # Reverse proxy (rewrites browser UA)
+│   ├── bt-proxy3.py               # Reverse proxy v3 (multi-threaded, WebSocket, recommended)
+│   └── bt-proxy2.py               # Reverse proxy v2 (single-threaded, legacy)
 ├── bt-security/               # BT Panel security risk fix
 │   ├── fix_security_risks.sh      # Fix all security risks without membership
 │   └── README.md                  # Fix principles documentation
 └── watchdog/                  # Process persistence
+    ├── bt-watchdog.sh             # BT Panel watchdog v3
     ├── watchdog.sh                # Session-surviving watchdog
     └── autostart.sh               # Auto-recovery on restart
 ```
@@ -449,11 +457,15 @@ After configuring a Public Hostname in the Cloudflare Dashboard, you can access 
 
 #### 3. BT Panel Proxy (bt-panel/)
 
-The BT Panel (aaPanel/BT-Panel) has an `is_spider()` UA-rewriting check that rejects requests with non-browser User-Agents. `bt-proxy2.py` acts as a reverse proxy, replacing all request User-Agents with a browser UA while handling HTTPS-to-HTTP conversion.
+The BT Panel (aaPanel/BT-Panel) has an `is_spider()` UA-rewriting check that rejects requests with non-browser User-Agents. The proxy acts as a reverse proxy, replacing all request User-Agents with a browser UA while handling HTTPS-to-HTTP conversion.
+
+**bt-proxy3.py (recommended)**: Multi-threaded concurrent + WebSocket support + HTTP/1.1 keep-alive. Fixes the Chrome crash issue caused by bt-proxy2.py's single-threaded design.
+
+**bt-proxy2.py (legacy)**: Single-threaded implementation, kept for reference only.
 
 ```bash
-# Start the proxy (listens on port 18099 by default)
-python3 bt-panel/bt-proxy2.py
+# Start the proxy v3 (listens on port 18099 by default)
+python3 bt-panel/bt-proxy3.py
 ```
 
 When used with Cloudflare Tunnel, set the Service to `HTTP localhost:18099` in the Public Hostname configuration.
