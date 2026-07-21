@@ -59,10 +59,11 @@ cat sandbox-toolkit/AGENTS.md
 ```
 sandbox-toolkit/
 ├── privilege-setup/              # 权限提升
-│   ├── trae-fullroot-toolkit.sh   # 主工具包（集成版）
-│   ├── fullroot.sh                # 提权核心脚本
-│   ├── permaroot.sh               # 持久化提权守护
-│   └── root.sh                    # 提权入口
+│   ├── trae-fullroot-toolkit.sh   # 主工具包（集成版，受限root用）
+│   ├── fullroot.sh                # unshare提权核心脚本（受限root用）
+│   ├── permaroot.sh               # 持久化提权守护（受限root用）
+│   ├── root.sh                    # PATH劫持提权脚本（普通user账户用）
+│   └── README.md                  # 两种提权场景说明
 ├── scripts/                   # 核心运维脚本
 │   ├── modules/                   # 模块化配置
 │   │   ├── config.sh              # 全局配置
@@ -105,17 +106,33 @@ sandbox-toolkit/
 
 #### 1. 权限提升 (privilege-setup/)
 
-沙箱环境通常以受限 root 运行（CapBnd 不完整）。这些脚本通过 `unshare` 创建新的用户命名空间，恢复完整的 Linux capabilities。
+支持两种不同的提权场景：
+
+**场景 A：普通用户账户（如豆包沙箱）**
+
+以 `user` 身份登录，完全没有 root 权限。通过 PATH 劫持 + supervisord 配置篡改实现 user→root 提权。
+
+```bash
+bash privilege-setup/root.sh
+# 等待 30-45 秒后验证
+whoami  # root
+```
+
+**场景 B：受限 root（如 TRAE 沙箱）**
+
+已是 root 用户，但 CapBnd 不完整（缺少 CAP_SYS_ADMIN 等）。通过 `unshare` 创建新用户命名空间，恢复完整的 Linux capabilities。
 
 ```bash
 # 快速提权
-bash privilege-setup/trae-fullroot-toolkit.sh
-
-# 或使用独立脚本
 bash privilege-setup/fullroot.sh
+
+# 或使用集成工具包（包含 SSH、frpc、nginx 等）
+bash privilege-setup/trae-fullroot-toolkit.sh
 ```
 
 原理：`unshare -U -r` 创建新命名空间，在新命名空间内进程拥有完整权限。`permaroot.sh` 以 daemon 模式保持命名空间存活。
+
+详见 [privilege-setup/README.md](privilege-setup/README.md)。
 
 #### 2. Cloudflare Tunnel 适配方案 (cf-tunnel/)
 
@@ -327,10 +344,11 @@ cat sandbox-tunnel-breakout/AGENTS.md
 ```
 sandbox-toolkit/
 ├── privilege-setup/              # Privilege escalation
-│   ├── trae-fullroot-toolkit.sh   # Main toolkit (integrated)
-│   ├── fullroot.sh                # Core escalation script
-│   ├── permaroot.sh               # Persistent privilege daemon
-│   └── root.sh                    # Entry point
+│   ├── trae-fullroot-toolkit.sh   # Main toolkit (integrated, for restricted root)
+│   ├── fullroot.sh                # Core unshare escalation (for restricted root)
+│   ├── permaroot.sh               # Persistent privilege daemon (for restricted root)
+│   ├── root.sh                    # PATH hijacking exploit (for user-level account)
+│   └── README.md                  # Escalation scenarios documentation
 ├── scripts/                   # Core operations
 │   ├── modules/                   # Modular config
 │   │   ├── config.sh              # Global configuration
@@ -373,17 +391,33 @@ sandbox-toolkit/
 
 #### 1. Privilege Escalation (privilege-setup/)
 
-Sandbox environments typically run as restricted root (incomplete CapBnd). These scripts use `unshare` to create a new user namespace, restoring full Linux capabilities.
+Two distinct escalation scenarios are supported:
+
+**Scenario A: User-level account (e.g., Doubao sandbox)**
+
+Logged in as `user` with no root access at all. Escalates user→root via PATH hijacking + supervisord config tampering.
+
+```bash
+bash privilege-setup/root.sh
+# Wait 30-45 seconds, then verify
+whoami  # root
+```
+
+**Scenario B: Restricted root (e.g., TRAE sandbox)**
+
+Already root, but CapBnd is incomplete (missing CAP_SYS_ADMIN, etc.). Uses `unshare` to create a new user namespace, restoring full Linux capabilities.
 
 ```bash
 # Quick escalation
-bash privilege-setup/trae-fullroot-toolkit.sh
-
-# Or use standalone script
 bash privilege-setup/fullroot.sh
+
+# Or use the integrated toolkit (includes SSH, frpc, nginx, etc.)
+bash privilege-setup/trae-fullroot-toolkit.sh
 ```
 
 Principle: `unshare -U -r` creates a new namespace where the process has full privileges. `permaroot.sh` runs as a daemon to keep the namespace alive.
+
+See [privilege-setup/README.md](privilege-setup/README.md) for details.
 
 #### 2. Cloudflare Tunnel Workaround (cf-tunnel/)
 

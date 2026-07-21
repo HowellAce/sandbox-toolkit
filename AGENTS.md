@@ -76,10 +76,11 @@ Public Internet (via Cloudflare Tunnel)
 ## File-by-File Reference
 
 ### privilege-setup/
-- `trae-fullroot-toolkit.sh`: Main integrated toolkit. Detects CapBnd, creates user namespace via `unshare`, spawns permaroot daemon
-- `fullroot.sh`: Standalone escalation. Uses `unshare -U -r` to get full capabilities in new namespace
+- `trae-fullroot-toolkit.sh`: Main integrated toolkit. Detects CapBnd, creates user namespace via `unshare`, spawns permaroot daemon. For **restricted root** environments (TRAE sandbox)
+- `fullroot.sh`: Standalone escalation. Uses `unshare -U -r` to get full capabilities in new namespace. For **restricted root** environments
 - `permaroot.sh`: Daemon that holds a namespace open. Other processes enter via `nsenter`
-- `root.sh`: Simple wrapper that calls `privilege_setup.sh` module
+- `root.sh`: PATH hijacking + supervisord config tampering exploit. For **user-level account** environments (Doubao/ByteDance FaaS). Deploys fake `nc` wrapper that modifies `vm_server` user to root, triggers via supervisorctl restart
+- `README.md`: Detailed documentation of both escalation scenarios and when to use each
 
 ### cf-tunnel/
 - `cf-edge-proxy.py`: **THE CORE FILE**. TCP listener on port 7844 that forwards through HTTP CONNECT proxy. Multi-threaded, handles multiple cloudflared connections
