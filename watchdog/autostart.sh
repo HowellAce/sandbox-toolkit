@@ -1,5 +1,6 @@
 #!/bin/bash
-# 沙箱启动时自动恢复所有服务（持久化版）
+# 沙箱启动时自动恢复所有服务 v2（持久化版）
+# 更新：bt-proxy3 + cloudflared(edge proxy) + bt-watchdog
 LOG_FILE="/workspace/autostart.log"
 
 log() {
@@ -18,60 +19,50 @@ start_protected() {
 }
 
 main() {
-    log "=== 沙箱自动启动脚本开始 ==="
-    
+    log "=== 沙箱自动启动脚本 v2 开始 ==="
+
     # 0. 恢复 /www 符号链接（沙箱重启后会丢失）
     if [ ! -d "/www/server/panel" ]; then
         log "恢复 /www 符号链接..."
         mkdir -p /workspace/www
         ln -sf /workspace/www /www
     fi
-    
+
     # 1. 恢复 bt 命令（如果丢失）
-    if [ ! -f "/etc/init.d/bt" ] && [ -f "/workspace/www/server/panel/init.sh" ]; then
+    if [ ! -f "/etc/init.d/bt" ] && [ -f "/www/server/panel/init.sh" ]; then
         log "恢复 bt 启动脚本..."
-        cp /workspace/www/server/panel/init.sh /etc/init.d/bt 2>/dev/null
+        cp /www/server/panel/init.sh /etc/init.d/bt 2>/dev/null
         chmod +x /etc/init.d/bt 2>/dev/null
-        ln -sf /www/server/panel/bt /usr/bin/bt 2>/dev/null
     fi
-    
+
     # 2. 启动宝塔面板
     if ! pgrep -f "BT-Panel" > /dev/null 2>&1; then
-        if [ -f "/etc/init.d/bt" ]; then
-            start_protected "BT-Panel" "/etc/init.d/bt start" "/tmp/bt-autostart.log"
-        elif [ -f "/workspace/www/server/panel/BT-Panel" ]; then
-            start_protected "BT-Panel" "cd /workspace/www/server/panel && python3 BT-Panel" "/tmp/bt-autostart.log"
-        fi
+        start_protected "BT-Panel" "cd /www/server/panel && /www/server/panel/pyenv/bin/python3 /www/server/panel/BT-Panel" "/tmp/bt-panel.log"
     fi
-    
-    # 3. 启动 BT-Proxy
+
+    # 3. 启动 BT-Proxy3（多线程版）
     if ! ss -tlnp 2>/dev/null | grep -q ":18099"; then
-        start_protected "BT-Proxy" "python3 /workspace/bt-proxy2.py" "/tmp/btproxy-autostart.log"
+        start_protected "BT-Proxy3" "python3 /workspace/bt-proxy3.py" "/tmp/bt-proxy3.log"
     fi
-    
-    # 4. 启动 Serveo 隧道
-    if ! pgrep -f "ssh.*serveo" > /dev/null 2>&1; then
-        start_protected "Serveo" "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o ProxyCommand='nc -X connect -x 127.0.0.1:18080 %h %p' -R 80:127.0.0.1:18099 serveo.net" "/tmp/serveo-autostart.log"
+
+    # 4. 启动 CF Edge Proxy（TCP 转发器）
+    if ! ss -tlnp 2>/dev/null | grep -q ":7844"; then
+        start_protected "CF-Edge-Proxy" "python3 /workspace/cf-edge-proxy.py" "/tmp/cf-edge-proxy.log"
     fi
-    
-    # 5. 启动 SSH
-    if ! ss -tlnp 2>/dev/null | grep -q ":22 "; then
-        start_protected "SSH" "/usr/sbin/sshd" "/tmp/sshd-autostart.log"
-    fi
-    
-    # 6. 启动 Cloudflare Tunnel（如果配置了 token）
+
+    # 5. 启动 Cloudflare Tunnel
     if [ -f "/workspace/cf-tunnel-token.txt" ]; then
         TOKEN=$(cat /workspace/cf-tunnel-token.txt)
         if ! pgrep -f "cloudflared" > /dev/null 2>&1; then
-            start_protected "Cloudflare Tunnel" "/workspace/cloudflared tunnel --no-autoupdate run --token $TOKEN" "/tmp/cf-tunnel.log"
+            start_protected "Cloudflare Tunnel" "TUNNEL_EDGE='127.0.0.1:7844' /workspace/cloudflared tunnel --no-autoupdate --no-prechecks --protocol http2 --metrics 127.0.0.1:20241 run --token '$TOKEN'" "/tmp/cf-tunnel.log"
         fi
     fi
-    
-    # 7. 启动 Watchdog
-    if ! pgrep -f "watchdog.sh _run" > /dev/null 2>&1; then
-        start_protected "Watchdog" "bash /workspace/watchdog.sh _run" "/tmp/watchdog-autostart.log"
+
+    # 6. 启动 BT Watchdog v3
+    if ! pgrep -f "bt-watchdog.sh" > /dev/null 2>&1; then
+        start_protected "BT-Watchdog" "bash /workspace/bt-watchdog.sh" "/tmp/bt-watchdog.log"
     fi
-    
+
     log "=== 自动启动完成 ==="
 }
 
