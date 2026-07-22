@@ -135,7 +135,7 @@ BT-Panel's `daemonize()` function forks the process, which breaks supervisor tra
 - `bt-watchdog.sh`: BT Panel watchdog v3. Monitors: BT-Panel, bt-proxy3, cf-edge-proxy, cloudflared. 30s polling. Fixes `/www` symlink on each cycle. Forces HTTP/2 for cloudflared
 - `watchdog.sh`: General-purpose process monitor
 - `autostart.sh v3`: Post-restart recovery. Restores `/www` symlink, patches BT-Panel for foreground mode, registers services to supervisor, starts watchdog
-- `check-load.sh`: System load checker v2. Returns JSON with load level (safe/warn/critical) and resource metrics. Prioritizes BT Panel Python API (`system.system().GetLoadAverage()`) for accurate data, falls back to `/proc` when BT Panel is unavailable. AI must run this before heavy tasks. User can bypass with `[FORCE]` or `[F]` tag
+- `check-load.sh`: System load checker v2. Returns JSON with load level (safe/warn/critical) and resource metrics. Two data sources: (1) BT Panel Python API — requires BT Panel installed as prerequisite, provides accurate real-time CPU usage and BT safety thresholds; (2) `/proc` fallback — no prerequisites, works on any Linux. AI must run this before heavy tasks. User can bypass with `[FORCE]` or `[F]` tag
 
 ### supervisor-bt.conf
 - Supervisor program definitions for: bt-panel, bt-proxy3, cf-edge-proxy, cloudflared
@@ -172,7 +172,12 @@ bash /workspace/check-load.sh
 
 返回 JSON 包含 `level`（safe/warn/critical）、`can_run_heavy_tasks`（true/false）和 `source`（bt-panel-api 或 proc-fallback）。
 
-脚本优先使用宝塔面板的 Python API（`system.system().GetLoadAverage()`）获取数据，数据更准确（包含实时 CPU 使用率、宝塔安全线等）。当宝塔不可用时自动回退到 `/proc/loadavg` + `free` + `df`。
+脚本有两个数据源，按优先级自动选择：
+
+1. **宝塔面板 Python API**（`source: "bt-panel-api"`）：调用 `system.system().GetLoadAverage()` 等方法，数据更准确（包含实时 CPU 使用率、宝塔安全线等）。
+   - **前置条件**：已安装宝塔面板（`/www/server/panel/pyenv/bin/python3` 存在且 `/www/server/panel/class/system.py` 可导入）
+   - 如果沙箱未安装宝塔面板，此数据源不可用，自动降级到方案 2
+2. **/proc 回退**（`source: "proc-fallback"`）：直接读 `/proc/loadavg` + `free` + `df`，无需任何前置条件，但缺少实时 CPU 使用率。
 
 ### 负载等级与行为
 
