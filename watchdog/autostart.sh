@@ -96,6 +96,12 @@ WRAPPER
         setsid bash -c "nohup bash /workspace/bt-watchdog.sh > /tmp/bt-watchdog.log 2>&1 &" > /dev/null 2>&1
     fi
 
+    # 7. 修复安全风险（非重负载，可安全执行）
+    if [ -f "/workspace/fix-security.sh" ]; then
+        log "修复安全风险..."
+        bash /workspace/fix-security.sh >> "$LOG_FILE" 2>&1
+    fi
+
     log "=== 自动启动完成 ==="
     supervisorctl status 2>&1 | tee -a "$LOG_FILE"
 }
