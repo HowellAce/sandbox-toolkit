@@ -84,9 +84,15 @@ check_services() {
         failed+=("bt-panel")
     fi
 
-    # 检查 bt-proxy3 (端口 18099)
+    # 检查 bt-proxy3 (端口 18099 + HTTP 健康检查)
     if ! ss -tlnp 2>/dev/null | grep -q ":18099"; then
-        failed+=("bt-proxy3")
+        failed+=("bt-proxy3(port)")
+    else
+        # HTTP 健康检查（检测 bt-proxy3 是否返回正确响应，而非 HTML 错误页）
+        http_code=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:18099/hwbt123" 2>/dev/null)
+        if [ "$http_code" != "200" ] && [ "$http_code" != "302" ]; then
+            failed+=("bt-proxy3(http=$http_code)")
+        fi
     fi
 
     # 检查 cf-edge-proxy (端口 7844)
@@ -94,7 +100,7 @@ check_services() {
         failed+=("cf-edge-proxy")
     fi
 
-    # 检查 cloudflared (进程)
+    # 检查 cloudflared (进程 + 隧道就绪)
     if ! pgrep -f "cloudflared.*tunnel" > /dev/null 2>&1; then
         failed+=("cloudflared")
     fi
@@ -102,6 +108,16 @@ check_services() {
     # 检查 /www 软链接
     if [ ! -d "/www/server/panel" ]; then
         failed+=("www-symlink")
+    fi
+
+    # 检查 supervisor include 是否丢失
+    if ! grep -q "include" /app/supervisord.conf 2>/dev/null; then
+        failed+=("supervisor-include")
+    fi
+
+    # 检查 agent-tool-host wrapper 是否丢失
+    if [ ! -f /app/bin/agent-tool-host.orig ] 2>/dev/null; then
+        failed+=("wrapper")
     fi
 
     if [ ${#failed[@]} -gt 0 ]; then

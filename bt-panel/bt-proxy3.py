@@ -37,6 +37,17 @@ MAX_CONCURRENT = 50
 
 class BTProxyHandler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
+    timeout = 30  # 防止空闲连接挂起
+
+    def send_error(self, code, message=None):
+        """覆盖默认的 HTML 错误页，改为纯文本"""
+        self.send_response(code)
+        self.send_header('Content-Type', 'text/plain')
+        msg = message or self.responses.get(code, ('',))[0]
+        self.send_header('Content-Length', str(len(msg.encode())))
+        self.send_header('Connection', 'close')
+        self.end_headers()
+        self.wfile.write(msg.encode())
 
     def _connect_backend(self):
         """创建到后端的连接"""
@@ -281,7 +292,7 @@ class BTProxyHandler(BaseHTTPRequestHandler):
 
             # 发送响应头和体
             self.send_header('Content-Length', str(len(resp_body)))
-            self.send_header('Connection', 'keep-alive')
+            self.send_header('Connection', 'close')  # close 防止空闲连接产生 HTML 错误页
             self.end_headers()
             self.wfile.write(resp_body)
 
