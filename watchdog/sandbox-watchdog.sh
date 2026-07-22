@@ -146,8 +146,9 @@ run_recovery() {
             mv /app/bin/agent-tool-host /app/bin/agent-tool-host.orig
             cat > /app/bin/agent-tool-host << 'WRAPPER'
 #!/bin/bash
-if [ -f /workspace/autostart.sh ]; then
-    nohup bash /workspace/autostart.sh > /workspace/autostart-boot.log 2>&1 &
+# agent-tool-host wrapper: 开机时启动 watchdog（独立进程，不依赖 supervisor）
+if [ -f /workspace/sandbox-watchdog.sh ]; then
+    nohup bash /workspace/sandbox-watchdog.sh start > /workspace/logs/watchdog-boot.log 2>&1 &
     disown 2>/dev/null || true
 fi
 exec /app/bin/agent-tool-host.orig "$@"
