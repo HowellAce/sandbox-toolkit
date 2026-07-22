@@ -135,6 +135,7 @@ BT-Panel's `daemonize()` function forks the process, which breaks supervisor tra
 - `bt-watchdog.sh`: BT Panel watchdog v3. Monitors: BT-Panel, bt-proxy3, cf-edge-proxy, cloudflared. 30s polling. Fixes `/www` symlink on each cycle. Forces HTTP/2 for cloudflared
 - `watchdog.sh`: General-purpose process monitor
 - `autostart.sh v3`: Post-restart recovery. Restores `/www` symlink, patches BT-Panel for foreground mode, registers services to supervisor, starts watchdog
+- `check-load.sh`: System load checker. Returns JSON with load level (safe/warn/critical) and resource metrics. AI must run this before heavy tasks. User can bypass with `[FORCE]` tag
 
 ### supervisor-bt.conf
 - Supervisor program definitions for: bt-panel, bt-proxy3, cf-edge-proxy, cloudflared
@@ -151,6 +152,77 @@ BT-Panel's `daemonize()` function forks the process, which breaks supervisor tra
 - `install-natfrp-service.sh`: Installs natfrp-service and frpc binary
 - `sandbox-reset-tracker-fixed.sh`: Detects sandbox resets via heartbeat file
 - `modules/`: Shared configuration and functions sourced by other scripts
+
+## Critical: Load-Aware Task Execution (防止 994 错误)
+
+沙箱资源有限（2 核 CPU、3.8GB 内存、无 Swap）。高负载操作（如 `git push`、`apt install`、编译、安全扫描）可能把负载跑满，导致沙箱被平台强制回收（表现为 994 错误）。AI 必须在执行重负载任务前检查系统负载。
+
+### 强制执行标签：`[FORCE]`
+
+用户可以在消息中包含 `[FORCE]` 标签来跳过负载检查，强制执行所有任务：
+- 用户消息包含 `[FORCE]` → 跳过负载检查，直接执行
+- 用户消息不含 `[FORCE]` → 必须先检查负载，负载过高时跳过非必要任务
+
+### 负载检查脚本
+
+在执行任何重负载任务前，先运行：
+```bash
+bash /workspace/check-load.sh
+```
+
+返回 JSON 包含 `level`（safe/warn/critical）和 `can_run_heavy_tasks`（true/false）。
+
+### 负载等级与行为
+
+| 等级 | CPU 负载 | 内存使用率 | 磁盘使用率 | AI 行为 |
+|------|----------|-----------|-----------|---------|
+| `safe` | < 1.6 | < 75% | < 80% | 正常执行所有任务 |
+| `warn` | 1.6 - 1.8 | 75% - 85% | 80% - 90% | 仅执行必要任务，跳过非必要重负载操作 |
+| `critical` | > 1.8 | > 85% | > 90% | 仅执行轻量操作（文件读写、配置修改），跳过所有重负载任务 |
+
+### 任务分类
+
+**必要任务（warn 级别仍可执行）**：
+- 服务启动/重启（`supervisorctl restart`、`autostart.sh`）
+- 文件读写、配置修改
+- 轻量级 shell 命令（`curl`、`cat`、`grep`）
+- 密码重置、数据库查询
+
+**非必要任务（warn 级别跳过）**：
+- `git push` / `git clone`（网络 IO + CPU 压缩）
+- `apt install` / `apt upgrade`（磁盘 IO + 网络 + CPU）
+- 编译操作（`gcc`、`make`、`pip install`）
+- BT Panel 安全扫描（`_get_list()` 消耗大量 CPU）
+- 生成 SSL 证书（`openssl` CPU 密集）
+
+**重负载任务（critical 级别也跳过）**：
+- 同时启动多个服务
+- 大文件下载/上传
+- 数据库全表扫描
+
+### AI 执行流程
+
+```
+用户消息 → 检查是否包含 [FORCE]
+  ├─ 是 → 直接执行所有任务（但仍建议先检查负载并告知用户）
+  └─ 否 → 运行 check-load.sh
+           ├─ safe → 正常执行
+           ├─ warn → 执行必要任务，跳过非必要任务，告知用户被跳过的任务
+           └─ critical → 仅执行轻量操作，告知用户当前负载过高，建议稍后重试或使用 [FORCE]
+```
+
+### 告知用户的格式
+
+当跳过任务时，AI 应在回复中说明：
+```
+⚠️ 负载检查：当前 CPU 负载 1.7（阈值 1.6），内存 78%
+已跳过以下任务：
+- git push（非必要，可稍后执行）
+- 安全扫描（非必要，可稍后执行）
+已执行的必要任务：
+- 服务重启
+如需强制执行所有任务，请在消息中添加 [FORCE] 标签
+```
 
 ## Critical: AI Agent GitHub Mistakes
 
@@ -295,6 +367,8 @@ git config user.name "..."
 - Use `git config --global` in sandbox — use local config
 - Use `git push --force` without user confirmation
 - Use `git add .` without reviewing `git status` first
+- Run heavy tasks (git push, apt install, compilation) without checking load first
+- Run multiple heavy tasks simultaneously (risk of 994 error)
 
 ### Do
 - Store all persistent files in `/workspace/` — only persistent directory
@@ -305,6 +379,8 @@ git config user.name "..."
 - Run `bash /workspace/autostart.sh` after sandbox reset to restore all services
 - Always set git config with user's real email before committing
 - Always review `git status` before `git add`
+- Run `bash /workspace/check-load.sh` before heavy tasks (unless user used [FORCE])
+- Inform user when tasks are skipped due to high load
 
 ### Environment Variables
 - `TUNNEL_EDGE`: Forces cloudflared to connect to a specific edge address (key workaround)
@@ -329,10 +405,14 @@ git config user.name "..."
 | Supervisord.conf lost after reset | `/app/` not persistent | `autostart.sh v3` re-adds `[include]` directive |
 | GitHub commit attributed to stranger | Wrong git author email | Set `git config user.email` to user's real email |
 | Token leaked in .git/config | Token in clone URL | Use credential helper, clear URL after push |
+| Error 994 "请求服务超时" | Sandbox load maxed out (CPU/memory/disk) | Run `check-load.sh` before heavy tasks; use `[FORCE]` to override |
 
 ## Testing Commands
 
 ```bash
+# Check system load before heavy tasks
+bash /workspace/check-load.sh | python3 -m json.tool
+
 # Check supervisor status (all services)
 supervisorctl status
 
