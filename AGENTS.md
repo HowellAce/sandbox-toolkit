@@ -135,7 +135,7 @@ BT-Panel's `daemonize()` function forks the process, which breaks supervisor tra
 - `bt-watchdog.sh`: BT Panel watchdog v3. Monitors: BT-Panel, bt-proxy3, cf-edge-proxy, cloudflared. 30s polling. Fixes `/www` symlink on each cycle. Forces HTTP/2 for cloudflared
 - `watchdog.sh`: General-purpose process monitor
 - `autostart.sh v3`: Post-restart recovery. Restores `/www` symlink, patches BT-Panel for foreground mode, registers services to supervisor, starts watchdog
-- `check-load.sh`: System load checker. Returns JSON with load level (safe/warn/critical) and resource metrics. AI must run this before heavy tasks. User can bypass with `[FORCE]` tag
+- `check-load.sh`: System load checker v2. Returns JSON with load level (safe/warn/critical) and resource metrics. Prioritizes BT Panel Python API (`system.system().GetLoadAverage()`) for accurate data, falls back to `/proc` when BT Panel is unavailable. AI must run this before heavy tasks. User can bypass with `[FORCE]` or `[F]` tag
 
 ### supervisor-bt.conf
 - Supervisor program definitions for: bt-panel, bt-proxy3, cf-edge-proxy, cloudflared
@@ -157,11 +157,11 @@ BT-Panel's `daemonize()` function forks the process, which breaks supervisor tra
 
 沙箱资源有限（2 核 CPU、3.8GB 内存、无 Swap）。高负载操作（如 `git push`、`apt install`、编译、安全扫描）可能把负载跑满，导致沙箱被平台强制回收（表现为 994 错误）。AI 必须在执行重负载任务前检查系统负载。
 
-### 强制执行标签：`[FORCE]`
+### 强制执行标签：`[FORCE]` 或 `[F]`
 
-用户可以在消息中包含 `[FORCE]` 标签来跳过负载检查，强制执行所有任务：
-- 用户消息包含 `[FORCE]` → 跳过负载检查，直接执行
-- 用户消息不含 `[FORCE]` → 必须先检查负载，负载过高时跳过非必要任务
+用户可以在消息中包含 `[FORCE]` 或 `[F]` 标签来跳过负载检查，强制执行所有任务：
+- 用户消息包含 `[FORCE]` 或 `[F]` → 跳过负载检查，直接执行
+- 用户消息不含上述标签 → 必须先检查负载，负载过高时跳过非必要任务
 
 ### 负载检查脚本
 
@@ -170,7 +170,9 @@ BT-Panel's `daemonize()` function forks the process, which breaks supervisor tra
 bash /workspace/check-load.sh
 ```
 
-返回 JSON 包含 `level`（safe/warn/critical）和 `can_run_heavy_tasks`（true/false）。
+返回 JSON 包含 `level`（safe/warn/critical）、`can_run_heavy_tasks`（true/false）和 `source`（bt-panel-api 或 proc-fallback）。
+
+脚本优先使用宝塔面板的 Python API（`system.system().GetLoadAverage()`）获取数据，数据更准确（包含实时 CPU 使用率、宝塔安全线等）。当宝塔不可用时自动回退到 `/proc/loadavg` + `free` + `df`。
 
 ### 负载等级与行为
 
@@ -203,12 +205,12 @@ bash /workspace/check-load.sh
 ### AI 执行流程
 
 ```
-用户消息 → 检查是否包含 [FORCE]
+用户消息 → 检查是否包含 [FORCE] 或 [F]
   ├─ 是 → 直接执行所有任务（但仍建议先检查负载并告知用户）
   └─ 否 → 运行 check-load.sh
            ├─ safe → 正常执行
            ├─ warn → 执行必要任务，跳过非必要任务，告知用户被跳过的任务
-           └─ critical → 仅执行轻量操作，告知用户当前负载过高，建议稍后重试或使用 [FORCE]
+           └─ critical → 仅执行轻量操作，告知用户当前负载过高，建议稍后重试或使用 [FORCE]/[F]
 ```
 
 ### 告知用户的格式
@@ -221,7 +223,7 @@ bash /workspace/check-load.sh
 - 安全扫描（非必要，可稍后执行）
 已执行的必要任务：
 - 服务重启
-如需强制执行所有任务，请在消息中添加 [FORCE] 标签
+如需强制执行所有任务，请在消息中添加 [FORCE] 或 [F] 标签
 ```
 
 ## Critical: AI Agent GitHub Mistakes
