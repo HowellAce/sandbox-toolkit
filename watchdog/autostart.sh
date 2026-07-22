@@ -43,6 +43,24 @@ if old in c:
 " 2>&1
     fi
 
+    # 3.5 重建 agent-tool-host wrapper（开机自动恢复服务）
+    if [ ! -f /app/bin/agent-tool-host.orig ]; then
+        if file /app/bin/agent-tool-host 2>/dev/null | grep -q "ELF"; then
+            log "创建 agent-tool-host wrapper..."
+            mv /app/bin/agent-tool-host /app/bin/agent-tool-host.orig
+            cat > /app/bin/agent-tool-host << 'WRAPPER'
+#!/bin/bash
+if [ -f /workspace/autostart.sh ]; then
+    nohup bash /workspace/autostart.sh > /workspace/autostart-boot.log 2>&1 &
+    disown 2>/dev/null || true
+fi
+exec /app/bin/agent-tool-host.orig "$@"
+WRAPPER
+            chmod +x /app/bin/agent-tool-host
+            log "agent-tool-host wrapper 已创建"
+        fi
+    fi
+
     # 4. 注册服务到supervisor
     if [ -f "/workspace/supervisor-bt.conf" ]; then
         log "注册服务到supervisor..."

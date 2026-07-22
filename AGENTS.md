@@ -132,16 +132,24 @@ BT-Panel's `daemonize()` function forks the process, which breaks supervisor tra
   3. **Scan engine fix**: `new_vul_list` may point to non-existent `vul_centos7.json`; call `init_new_vul()` to fix
 
 ### watchdog/
-- `bt-watchdog.sh`: BT Panel watchdog v3. Monitors: BT-Panel, bt-proxy3, cf-edge-proxy, cloudflared. 30s polling. Fixes `/www` symlink on each cycle. Forces HTTP/2 for cloudflared
+- `sandbox-watchdog.sh`: **增强版守护进程**（基于 tar 包中 `sandbox-reset-tracker.sh` 增强）。三大功能：(1) 心跳检测沙箱重置（boot_id 变化）；(2) 监控 5 个服务端口/进程状态；(3) 服务异常时自动运行 `autostart.sh` 恢复。30s 轮询，恢复后 2 分钟冷却期。已注册为 supervisor 程序
+- `bt-watchdog.sh`: BT Panel 专用 watchdog v3（旧版，被 sandbox-watchdog.sh 取代，保留作为备用）
 - `watchdog.sh`: General-purpose process monitor
-- `autostart.sh v3`: Post-restart recovery. Restores `/www` symlink, patches BT-Panel for foreground mode, registers services to supervisor, starts watchdog
+- `autostart.sh v3`: Post-restart recovery. Restores `/www` symlink, patches BT-Panel for foreground mode, rebuilds agent-tool-host wrapper, registers services to supervisor, starts watchdog
 - `check-load.sh`: System load checker v2. Returns JSON with load level (safe/warn/critical) and resource metrics. Two data sources: (1) BT Panel Python API — requires BT Panel installed as prerequisite, provides accurate real-time CPU usage and BT safety thresholds; (2) `/proc` fallback — no prerequisites, works on any Linux. AI must run this before heavy tasks. User can bypass with `[FORCE]` or `[F]` tag
 
 ### supervisor-bt.conf
-- Supervisor program definitions for: bt-panel, bt-proxy3, cf-edge-proxy, cloudflared
+- Supervisor program definitions for: bt-panel, bt-proxy3, cf-edge-proxy, cloudflared, sandbox-watchdog
 - Each service: `autostart=true`, `autorestart=true`, `startretries=3`
 - Log files in `/workspace/logs/`
 - Environment variables: `TUNNEL_EDGE=127.0.0.1:7844` for cloudflared, `PYTHONPATH` for bt-panel
+- sandbox-watchdog runs `sandbox-watchdog.sh _daemon` as a foreground process (supervisor tracks it directly)
+
+### agent-tool-host Wrapper (开机自动恢复)
+- `/app/bin/agent-tool-host` 被替换为 wrapper 脚本（原始二进制保存为 `.orig`）
+- wrapper 在启动 agent-tool-host 前，后台运行 `autostart.sh` 恢复所有服务
+- **注意**：`/app/` 在沙箱完全重置时会被还原，wrapper 可能丢失。`autostart.sh` 会自动重建 wrapper
+- 如果 wrapper 丢失，`sandbox-watchdog.sh` 也会在检测到服务异常时重建它
 
 ### scripts/
 - `recover_all.sh`: Full environment recovery after sandbox reset
