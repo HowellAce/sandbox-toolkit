@@ -386,6 +386,7 @@ git config user.name "..."
 - Run multiple heavy tasks simultaneously (risk of 994 error)
 
 ### Do
+- **MANDATORY: Run Session Start Auto-Recovery check at the start of every session** (see "Session Start Auto-Recovery" section)
 - Store all persistent files in `/workspace/` — only persistent directory
 - Use `setsid + nohup + disown` for processes that must survive session suspension
 - Register services to supervisor via `/workspace/supervisor-bt.conf` for auto-start
@@ -421,6 +422,8 @@ git config user.name "..."
 | GitHub commit attributed to stranger | Wrong git author email | Set `git config user.email` to user's real email |
 | Token leaked in .git/config | Token in clone URL | Use credential helper, clear URL after push |
 | Error 994 "请求服务超时" | Sandbox load maxed out (CPU/memory/disk) | Run `check-load.sh` before heavy tasks; use `[FORCE]` to override |
+| Error 1033 (recurring) | Full sandbox reset: `/app/` restored, wrapper lost, no auto-recovery | AI runs Session Start Auto-Recovery check; or manually run `autostart.sh` |
+| Wrapper lost after reset | `/app/bin/` is non-persistent, restored on reset | `autostart.sh` rebuilds wrapper; Session Start Check catches it |
 
 ## Testing Commands
 
@@ -480,6 +483,45 @@ with open('/www/server/panel/data/warning/tmp_result.json') as f:
 print(f'Risk: {len(r.get(\"risk\", []))}, Safe: {len(r.get(\"security\", []))}')
 "
 ```
+
+## CRITICAL: Session Start Auto-Recovery (会话启动自检)
+
+**This is the most important rule in this file. The AI MUST execute this check at the start of EVERY session, before processing any user request.**
+
+The sandbox may reset at any time (load exhaustion, platform maintenance, session timeout). On full reset:
+- `/app/` is restored to original (agent-tool-host wrapper lost, supervisor `[include]` lost)
+- `/www` symlink lost
+- All services die (BT-Panel, bt-proxy3, cloudflared, cf-edge-proxy, watchdog)
+- Only `agent-tool-host` restarts (via supervisor's original config)
+- **Nothing auto-starts our services** — the wrapper approach fails because `/app/` is non-persistent
+
+### Mandatory Session Start Check (执行于每次会话开始)
+
+```bash
+# Step 1: Quick check — if /www is missing OR supervisor has no bt programs, services are dead
+if [ ! -d "/www/server/panel" ] || ! supervisorctl status 2>/dev/null | grep -q "bt-panel"; then
+    echo "Services down — running auto-recovery..."
+    bash /workspace/autostart.sh
+fi
+```
+
+**This check takes <1 second. If services are already running, it's a no-op. If they're down, autostart.sh recovers everything (takes ~10s).**
+
+### Why the Wrapper Alone Is Not Enough
+
+The `agent-tool-host` wrapper (which starts the watchdog on boot) lives in `/app/bin/`, which is **non-persistent**. On full sandbox reset:
+1. `/app/` is restored from the sandbox image → wrapper reverts to original binary
+2. No wrapper → watchdog doesn't start → no auto-recovery
+3. Services stay dead until AI manually intervenes
+
+The **Session Start Auto-Recovery** rule solves this by leveraging the fact that the AI is always present in every session. Instead of relying on a non-persistent wrapper, the AI itself performs the recovery check.
+
+### Recovery Priority Order
+
+1. **Session Start Check** (AI-driven, most reliable) — runs at every session start
+2. **Watchdog** (process-driven, within-session) — monitors services every 30s, auto-recovers on crash
+3. **Wrapper** (boot-driven, soft-reset only) — starts watchdog on session suspend/resume
+4. **Manual `autostart.sh`** (user-triggered, fallback) — user asks AI to recover
 
 ## Post-Sandbox-Reset Checklist
 
