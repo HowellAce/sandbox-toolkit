@@ -32,3 +32,6 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# User-added userscripts (may contain custom/sensitive code)
+chrome-extension-proxy/userscripts/*.js
