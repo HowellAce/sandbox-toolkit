@@ -36,7 +36,7 @@ Sandbox Toolkit 是一套针对 AI 受限沙箱环境的综合工具集。
 
 ```bash
 # 克隆仓库
-git clone https://github.com/你的用户名/sandbox-toolkit.git
+git clone https://github.com/HowellAce/sandbox-toolkit.git
 
 # 让 AI 阅读 AGENTS.md
 cat sandbox-toolkit/AGENTS.md
@@ -339,7 +339,7 @@ If you are using an AI assistant (Claude, GPT, Gemini, etc.) to help operate in 
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/sandbox-tunnel-breakout.git
+git clone https://github.com/HowellAce/sandbox-tunnel-breakout.git
 
 # Have the AI read AGENTS.md
 cat sandbox-tunnel-breakout/AGENTS.md
